@@ -260,9 +260,9 @@ Net Benefit Year 1: $19.36M
 
 ## Contact & Attribution
 
-**Project Author:** [Mapenzi Supaki]  
+**Project Author:** [Mapenzi Supaki](https://www.ms.co.ke/)  
 **Role:** Senior Product Data Scientist  
-**Date Completed:** February 2026  
+**Date Completed:** Ongoing  
 **Technologies:** Oracle SQL 21c, Oracle SQL Developer, Statistical Analysis, Business Intelligence
 
 **Skills Demonstrated:**
