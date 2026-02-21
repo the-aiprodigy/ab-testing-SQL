@@ -1,4 +1,4 @@
-# Dashboard A/B Testing Project
+# Web Dashboard A/B Testing
 
 ## Project Overview
 
