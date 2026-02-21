@@ -122,11 +122,11 @@ COMMIT;
 SELECT * FROM ext_dashboard_sessions;
 
 -- Verify no rows were skipped
-SELECT COUNT(*) FROM dashboard_sessions;
 SELECT COUNT(*) FROM ext_dashboard_sessions;
+SELECT COUNT(*) FROM dashboard_sessions;
 
-SELECT timestamp_str
-FROM ext_dashboard_sessions
+SELECT timestamp
+FROM dashboard_sessions
 WHERE ROWNUM <= 20;
 
 SELECT *
@@ -134,17 +134,80 @@ FROM dashboard_sessions
 FETCH FIRST 5 ROWS ONLY;
 
 -- Find any malformed timestamps:
-SELECT timestamp_str
-FROM ext_dashboard_sessions
+SELECT timestamp
+FROM dashboard_sessions
 WHERE NOT REGEXP_LIKE(
-    timestamp_str,
+    timestamp,
     '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
 );
 
+-- 3. DATA QUALITY & BALANCE CHECKS
+-- rename timestamp to session_timestamp to improves clarity and avoid confusion with Oracle’s TIMESTAMP datatype keyword.
+ALTER TABLE dashboard_sessions
+RENAME COLUMN timestamp TO session_timestamp;
 
--- DATA QUALITY ASSESSMENT
-------------------------------------------------------------------------------
+
+
 -- Check 1: Record counts and completeness
+SELECT 
+    'Total Records' AS metric,
+    COUNT(*) AS value,
+    TO_CHAR(MIN(session_timestamp), 'YYYY-MM-DD HH24:MI:SS') AS min_date,
+    TO_CHAR(MAX(session_timestamp), 'YYYY-MM-DD HH24:MI:SS') AS max_date
+FROM dashboard_sessions
+UNION ALL
+SELECT 
+    'Missing Session IDs',
+    COUNT(*),
+    NULL,
+    NULL
+FROM dashboard_sessions
+WHERE session_id IS NULL
+UNION ALL
+SELECT 
+    'Missing User IDs',
+    COUNT(*),
+    NULL,
+    NULL
+FROM dashboard_sessions
+WHERE user_id IS NULL
+UNION ALL
+SELECT 
+    'Null Timestamps',
+    COUNT(*),
+    NULL,
+    NULL
+FROM dashboard_sessions
+WHERE session_timestamp IS NULL;
+
+-- Check 2: Duplicate detection
+SELECT 
+    'Duplicate Sessions' AS check_type,
+    COUNT(*) - COUNT(DISTINCT session_id) AS duplicate_count
+FROM dashboard_sessions
+UNION ALL
+SELECT 
+    'Sessions per User (Avg)',
+    ROUND(COUNT(*) / COUNT(DISTINCT user_id), 2)
+FROM dashboard_sessions;
+
+-- OR Check for duplicates only
+SELECT 
+    COUNT(*) AS total,
+    COUNT(DISTINCT session_id) AS unique_sessions,
+    CASE WHEN COUNT(*) = COUNT(DISTINCT session_id) THEN 'CLEAN' ELSE 'DUPLICATES' END AS status
+FROM dashboard_sessions;
+
+
+-- Check 3: Test group balance - should be ~50/50
+SELECT 
+    group_id,
+    COUNT(*) AS session_count,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage,
+    COUNT(DISTINCT user_id) AS unique_users
+FROM dashboard_sessions
+GROUP BY group_id
+ORDER BY group_id;
 
 
 -- Check 4: Data quality flags and outlier detection
@@ -170,19 +233,11 @@ FROM outlier_detection
 GROUP BY quality_flag
 ORDER BY record_count DESC;
 
--- Check 5: Group balance (should be ~50/50)
-SELECT 
-    group_id,
-    COUNT(*) AS session_count,
-    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage,
-    COUNT(DISTINCT user_id) AS unique_users
-FROM dashboard_sessions
-GROUP BY group_id
-ORDER BY group_id;
 
--- Check 6: Categorical variable distributions
+-- Check 5: Categorical variable distributions
 SELECT *
 FROM (
+-- Device Distribution
     SELECT 'Device Type Distribution' AS category, NULL AS subcategory, NULL AS cnt, NULL AS pct FROM DUAL
 
     UNION ALL
@@ -191,7 +246,8 @@ FROM (
            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)
     FROM dashboard_sessions
     GROUP BY device_type
-
+    
+-- Country Distribution
     UNION ALL
 
     SELECT 'Country Distribution', NULL, NULL, NULL FROM DUAL
@@ -202,7 +258,8 @@ FROM (
            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)
     FROM dashboard_sessions
     GROUP BY country
-
+    
+  -- Cookie Segment Distribution
     UNION ALL
 
     SELECT 'Cookie Segment Distribution', NULL, NULL, NULL FROM DUAL
