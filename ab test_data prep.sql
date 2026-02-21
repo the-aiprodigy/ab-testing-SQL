@@ -141,3 +141,78 @@ WHERE NOT REGEXP_LIKE(
     '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
 );
 
+
+-- DATA QUALITY ASSESSMENT
+------------------------------------------------------------------------------
+-- Check 1: Record counts and completeness
+
+
+-- Check 4: Data quality flags and outlier detection
+WITH outlier_detection AS (
+    SELECT 
+        session_id,
+        CASE 
+            WHEN page_load_time_sec < 0 THEN 'Negative Load Time'
+            WHEN page_load_time_sec > 10 THEN 'Extreme Load Time'
+            WHEN time_on_dashboard_sec < 0 THEN 'Negative Session Duration'
+            WHEN time_on_dashboard_sec > 600 THEN 'Extreme Duration (>10min)'
+            WHEN widgets_viewed > 10 THEN 'Unusually High Widgets'
+            WHEN filters_applied > 10 THEN 'Unusually High Filters'
+            ELSE 'Clean'
+        END AS quality_flag
+    FROM dashboard_sessions
+)
+SELECT 
+    quality_flag,
+    COUNT(*) AS record_count,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS pct_of_total
+FROM outlier_detection
+GROUP BY quality_flag
+ORDER BY record_count DESC;
+
+-- Check 5: Group balance (should be ~50/50)
+SELECT 
+    group_id,
+    COUNT(*) AS session_count,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage,
+    COUNT(DISTINCT user_id) AS unique_users
+FROM dashboard_sessions
+GROUP BY group_id
+ORDER BY group_id;
+
+-- Check 6: Categorical variable distributions
+SELECT *
+FROM (
+    SELECT 'Device Type Distribution' AS category, NULL AS subcategory, NULL AS cnt, NULL AS pct FROM DUAL
+
+    UNION ALL
+
+    SELECT NULL, device_type, COUNT(*),
+           ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)
+    FROM dashboard_sessions
+    GROUP BY device_type
+
+    UNION ALL
+
+    SELECT 'Country Distribution', NULL, NULL, NULL FROM DUAL
+
+    UNION ALL
+
+    SELECT NULL, country, COUNT(*),
+           ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)
+    FROM dashboard_sessions
+    GROUP BY country
+
+    UNION ALL
+
+    SELECT 'Cookie Segment Distribution', NULL, NULL, NULL FROM DUAL
+
+    UNION ALL
+
+    SELECT NULL, cookie_segment, COUNT(*),
+           ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)
+    FROM dashboard_sessions
+    GROUP BY cookie_segment
+)
+ORDER BY category NULLS LAST,
+         cnt DESC NULLS LAST;
