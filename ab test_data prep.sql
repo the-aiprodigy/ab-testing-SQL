@@ -273,3 +273,42 @@ FROM (
 )
 ORDER BY category NULLS LAST,
          cnt DESC NULLS LAST;
+         
+-- Check 6: Covariance Balance Checks
+SELECT 
+    device_type,
+    group_id,
+    COUNT(*) AS "COUNT"
+FROM dashboard_sessions
+GROUP BY device_type, group_id
+ORDER BY device_type, group_id;
+
+-- Country Covariate
+SELECT country, group_id, COUNT(*) AS "COUNT"
+FROM dashboard_sessions
+GROUP BY country, group_id;
+
+-- Cookie Segment Covariate
+SELECT cookie_segment, group_id, COUNT(*) AS "COUNT"
+FROM dashboard_sessions
+GROUP BY cookie_segment, group_id;
+
+-- Check 7: User-Level Exposure Consistency Check
+SELECT user_id,
+       COUNT(DISTINCT group_id) AS group_count
+FROM dashboard_sessions
+GROUP BY user_id
+HAVING COUNT(DISTINCT group_id) > 1;
+
+SELECT session_id,
+       COUNT(DISTINCT group_id)
+FROM dashboard_sessions
+GROUP BY session_id
+HAVING COUNT(DISTINCT group_id) > 1;
+
+SELECT user_id,
+       MIN(group_id),
+       MAX(group_id)
+FROM dashboard_sessions
+GROUP BY user_id
+HAVING MIN(group_id) != MAX(group_id);
